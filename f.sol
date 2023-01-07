@@ -20,7 +20,7 @@ contract ERC721 is ERC721A, Ownable, ReentrancyGuard, DefaultOperatorFilterer {
     uint256 public wlMintStartTime = 0;
     uint256 public wlMintEndTime = 0;
     uint256 public wlPrice = 0.04 ether;
-    uint256 public maxMinted = 2;
+    uint256 public maxWLMinted = 2;
 
     uint256 public pMintStartTime = 0;
     uint256 public pMintEndTime = 0;
@@ -46,7 +46,7 @@ contract ERC721 is ERC721A, Ownable, ReentrancyGuard, DefaultOperatorFilterer {
     }
 
     function setMaxMint(uint256 _max) external onlyOwner {
-        maxMinted = _max;
+        maxWLMinted = _max;
     }
 
     function setPTime(uint256 _startTime, uint256 _endTime) external onlyOwner {
@@ -88,6 +88,12 @@ contract ERC721 is ERC721A, Ownable, ReentrancyGuard, DefaultOperatorFilterer {
         _mint(_to, _amount);
     }
 
+    uint256 public whitelistLimitMinted = 4000;
+
+    function updateWhitelistLimitMinted(uint256 _quantity) external onlyOwner {
+        whitelistLimitMinted = _quantity;
+    }
+
     function whitelistMint(bytes32[] calldata _merkleProof, uint256 _quantity)
     external
     payable
@@ -96,7 +102,7 @@ contract ERC721 is ERC721A, Ownable, ReentrancyGuard, DefaultOperatorFilterer {
         require(saleIsActive, "Not allowed to mint");
         // verify limit per account
         require(_quantity > 0, "Wrong amount of minting");
-        require(_numberMinted(msg.sender) + _quantity <= maxMinted, "Exceed the limit of mint amount");
+        require(_numberMinted(msg.sender) + _quantity <= maxWLMinted, "Exceed the limit of mint amount");
         // verify merkle
         bytes32 leaf = keccak256(abi.encodePacked(msg.sender));
         require(MerkleProof.verify(_merkleProof, merkleRoot, leaf), "NOT incorporated in the whitelists");
@@ -106,11 +112,13 @@ contract ERC721 is ERC721A, Ownable, ReentrancyGuard, DefaultOperatorFilterer {
         // verify mint fee
         require(msg.value >= wlPrice * _quantity, "Insufficient value");
         // verify mint max count
+        require(wlTotalMinted + _quantity <= whitelistLimitMinted, "sold out");
         require(totalSupply() + _quantity <= maxSupply, "sold out");
-        _safeMint(msg.sender, _quantity);
         wlTotalMinted += _quantity;
+        _safeMint(msg.sender, _quantity);
     }
 
+    uint256 public mintFromFeoCount = 0;
     // feo
     function publicMint(uint256 _quantity) external payable nonReentrant {
         require(saleIsActive, "Not allowed to mint");
@@ -122,8 +130,9 @@ contract ERC721 is ERC721A, Ownable, ReentrancyGuard, DefaultOperatorFilterer {
         require(msg.value >= pPrice * _quantity, "Insufficient value");
         // verify mint max count
         require(totalSupply() + _quantity <= maxSupply, "sold out");
-        _safeMint(msg.sender, _quantity);
+        mintFromFeoCount += _quantity;
         publicTotalMinted += _quantity;
+        _safeMint(msg.sender, _quantity);
     }
 
     // element
@@ -155,10 +164,10 @@ contract ERC721 is ERC721A, Ownable, ReentrancyGuard, DefaultOperatorFilterer {
     // Nswap
     uint256 public mintFromNswapCount = 0;
 
-    uint256 public NswapMintlimit = 500;
+    uint256 public nswapMintlimit = 500;
 
     function updateNswapMintlimit(uint256 _limit) external onlyOwner {
-        NswapMintlimit = _limit;
+        nswapMintlimit = _limit;
     }
 
     function mintFromNswap(uint256 _quantity) external payable nonReentrant {
@@ -170,7 +179,7 @@ contract ERC721 is ERC721A, Ownable, ReentrancyGuard, DefaultOperatorFilterer {
         // verify mint gas
         require(msg.value >= pPrice * _quantity, "Insufficient value");
         // verify mint max count
-        require(mintFromNswapCount + _quantity <= NswapMintlimit, "sold out");
+        require(mintFromNswapCount + _quantity <= nswapMintlimit, "sold out");
         require(totalSupply() + _quantity <= maxSupply, "sold out");
         publicTotalMinted += _quantity;
         mintFromNswapCount += _quantity;
@@ -182,13 +191,13 @@ contract ERC721 is ERC721A, Ownable, ReentrancyGuard, DefaultOperatorFilterer {
     }
 
     function userCanMintNum(address _address) external view returns (uint256, uint256) {
-        uint256 wlCanMintNum = maxMinted - _numberMinted(_address);
-        uint256 pCanMintNum = maxSupply - wlTotalMinted;
+        uint256 pCanMintNum = maxSupply - totalSupply();
+        uint256 wlCanMintNum = maxWLMinted - _numberMinted(_address);
         return (pCanMintNum, wlCanMintNum);
     }
 
     // PlanNft
-    uint256 public mintFromPlanNft = 0;
+    uint256 public mintFromPlanNftCount = 0;
     uint256 public planNftMintLimit = 400;
 
     function updatePlanNftMintLimit(uint256 _limit) external onlyOwner {
@@ -205,9 +214,9 @@ contract ERC721 is ERC721A, Ownable, ReentrancyGuard, DefaultOperatorFilterer {
         require(msg.value >= pPrice * _quantity, "Insufficient value");
         // verify mint max count
         require(totalSupply() + _quantity <= maxSupply);
-        require(_quantity + mintFromPlanNft <= plannftMintlimit, "sold out");
+        require(_quantity + mintFromPlanNftCount <= planNftMintLimit, "sold out");
         publicTotalMinted += _quantity;
-        mintFromPlanNft += _quantity;
+        mintFromPlanNftCount += _quantity;
         _safeMint(msg.sender, _quantity);
     }
 
